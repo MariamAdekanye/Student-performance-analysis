@@ -31,10 +31,9 @@ library(ggplot2)
 library(mosaic)
 library(readr)
 ```
-
-```{r, include = FALSE}
-data_mat = read.csv("~/Desktop/Graduate Studies/Certificate in Data Science and Analytics/Data Science 602/Project/student-mat.csv", sep = ";")
-data_por = read.csv("~/Desktop/Graduate Studies/Certificate in Data Science and Analytics/Data Science 602/Project/student-por.csv", sep = ";")
+```{r}
+data_mat = read.csv("student-mat.csv", sep = ";")
+data_por = read.csv("student-por.csv", sep = ";")
 ```
 
 ```{r, include = FALSE}
@@ -435,8 +434,8 @@ library(readr)
 ## Importing and Cleaning the Dataset
 
 ```{r}
-data_mat = read.csv("~/Desktop/Graduate Studies/Certificate in Data Science and Analytics/Data Science 602/Project/student-mat.csv", sep = ";")
-data_por = read.csv("~/Desktop/Graduate Studies/Certificate in Data Science and Analytics/Data Science 602/Project/student-por.csv", sep = ";")
+data_mat = read.csv("student-mat.csv", sep = ";")
+data_por = read.csv("student-por.csv", sep = ";")
 ```
 
 ```{r}
