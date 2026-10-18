@@ -1,0 +1,13 @@
+# R session files
+.Rhistory
+.RData
+.Rproj.user/
+.Ruserdata
+
+# Office temporary/lock files
+~$*
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini

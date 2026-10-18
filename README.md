@@ -49,7 +49,7 @@ A positive value means the student scored higher in Portuguese.
 ├── report/
 │   ├── final_report.Rmd         # analysis + write-up (R Markdown)
 │   └── final_report.pdf
-├── figures/                     # exported plots
+├── figures/                     # plots shown in this README
 ├── presentation/
 │   └── Data_602_Presentation.pptx
 └── README.md
@@ -57,21 +57,37 @@ A positive value means the student scored higher in Portuguese.
 
 ## Exploratory Data Analysis
 
-| Visualization | Finding |
-|---|---|
-| Histogram of `G3_diff` | Right-skewed. Most differences fall between −4 and +6, where the shape is roughly bell-shaped, and a long right tail extends to about +15. |
-| Boxplot of `G3_diff` | Median difference of **+2**. The middle 50% of students fall between 0 and +4. |
-| `G3_diff` by address (urban vs rural) | Urban students have a slightly higher median grade difference than rural students. The boxes overlap substantially. |
-| Math vs Portuguese scatterplot | Moderately positive relationship (**r ≈ 0.48**), which supports treating the two grades as paired observations. |
+### Distribution of grade differences
 
-<!-- Add exported plots, e.g.:
-![Distribution of grade differences](figures/hist_grade_diff.png)
--->
+<p align="center"><img src="figures/01_histogram_grade_diff.png" width="600" alt="Histogram of Portuguese minus Math final grade differences"></p>
+
+The distribution is right-skewed. Most differences fall between −4 and +6, where the shape is roughly bell-shaped, and a long right tail extends to about +15. Students generally tend to score higher in Portuguese than in Mathematics.
+
+### Boxplot of grade differences
+
+<p align="center"><img src="figures/02_boxplot_grade_diff.png" width="600" alt="Boxplot of grade differences"></p>
+
+The median difference is **+2**, and the middle 50% of students fall between 0 and +4.
+
+### Grade differences by home address (urban vs rural)
+
+<p align="center"><img src="figures/03_boxplot_by_address.png" width="600" alt="Side-by-side boxplots of grade differences for rural and urban students"></p>
+
+Urban (U) students have a slightly higher median grade difference than rural (R) students. The boxes overlap substantially.
+
+### Mathematics vs Portuguese final grades
+
+<p align="center"><img src="figures/04_scatter_math_vs_por.png" width="600" alt="Scatterplot of Portuguese final grade against Math final grade"></p>
+
+There is a moderately positive relationship (**r ≈ 0.48**): students who do well in one subject generally do well in the other. This supports treating the two grades as paired observations. The vertical cluster at Math = 0 is the group of students with a zero Mathematics grade (see [Limitations](#limitations)).
 
 ## Condition Checking
 
 **Paired t-test (Method 1)**
 - **Normality:** The Normal Q-Q plot of `G3_diff` is approximately linear through the centre, with some departure in the tails. With n = 382, the Central Limit Theorem supports the t-procedure.
+
+<p align="center"><img src="figures/05_qq_grade_diff.png" width="550" alt="Normal Q-Q plot of grade differences"></p>
+
 - **Paired observations:** Each Math and Portuguese grade belongs to the same student, identified by merging the two course files.
 - **Independence:** The original study was observational, so independence of pairs cannot be guaranteed by design.
 - **Random sampling:** The original study randomly selected questionnaires and report-card records from two schools. Sampling is reasonably addressed, but generalization is limited.
