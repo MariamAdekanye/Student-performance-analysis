@@ -1,0 +1,737 @@
+---
+title: "Student Academic Performance"
+subtitle: "Final Report"
+author: "Mariam Adekanye,Bushra Fatima,Sagar Gupta,Qahir Ramji"
+date: "October 7th, 2026"
+output:
+  pdf_document:
+    toc: true
+    number_sections: true
+header-includes:
+  - \setlength{\parskip}{3.5pt}
+  - \usepackage{titling}
+  - \setlength{\droptitle}{4cm}
+  - \usepackage{etoolbox}
+  - \pretocmd{\tableofcontents}{\clearpage}{}{}
+---
+
+\newpage
+
+# Report
+
+## Introduction
+
+The data used in this report was obtained from the UCI Machine Learning Repository (https://archive.ics.uci.edu/dataset/320/student+performance). The data set contains information on students' demographics, family backgrounds, study habits, social activities, lifestyles, educational circumstances, and academic performance, collected through school reports and questionnaires. The purpose of this report is to compare students' academic performance in Portuguese and Mathematics and examine whether residential location (urban versus rural) is associated with final grades. Two statistical methods are performed. The first uses a paired t-test and conventional and bootstrap confidence intervals to compare Portuguese and Mathematics grades. The second uses parametric two-sample t-tests and corresponding confidence intervals to compare urban and rural students.
+
+## Data Visualization
+
+```{r, include = FALSE}
+library(dplyr)
+library(ggplot2)
+library(mosaic)
+library(readr)
+```
+
+```{r, include = FALSE}
+data_mat = read.csv("~/Desktop/Graduate Studies/Certificate in Data Science and Analytics/Data Science 602/Project/student-mat.csv", sep = ";")
+data_por = read.csv("~/Desktop/Graduate Studies/Certificate in Data Science and Analytics/Data Science 602/Project/student-por.csv", sep = ";")
+```
+
+```{r, include = FALSE}
+#the merged data represents 382 students that are taking both the Math class and the Portuguese class, that is for a given student, that same student is in both classes at that school
+data_merged = merge(data_mat, data_por, by = c("school", "sex", "age", "address", "famsize", "Pstatus",
+         "Medu", "Fedu", "Mjob", "Fjob", "reason", "nursery", "internet"))
+
+data_merged_clean = data_merged[, c("school", "sex", "age", "address", "Pstatus", "Mjob", "Fjob", "studytime.x", "studytime.y", "internet", "absences.x", "absences.y", "G1.x", "G2.x", "G3.x", "G1.y", "G2.y", "G3.y")]
+```
+
+```{r, include = FALSE}
+names(data_merged_clean) = c("school", "sex", "age", "address", "Pstatus", "Mjob", "Fjob", "studytime_math", "studytime_por", "internet", "absences_math", "absences_por", "G1_math", "G2_math", "G3_math", "G1_por", "G2_por", "G3_por")
+```
+
+```{r, include = FALSE}
+data_merged_clean = as.data.frame(data_merged_clean)
+data_merged_clean$G3_diff = data_merged_clean$G3_por - data_merged_clean$G3_math
+print(nrow(data_merged_clean))
+head(data_merged_clean)
+```
+
+The dataset used in this report has been organized and cleaned to contain 382 observations. The original dataset did not include a variable representing the difference between students' final grades in Portuguese and Mathematics. Therefore, a new variable was created to capture the difference between the final grades in the two subjects.
+
+### The Histogram of the Grade Difference
+
+```{r, echo = FALSE, fig.width=6, fig.height=2}
+ggplot(data_merged_clean, aes(x = G3_diff)) +
+  geom_histogram(binwidth = 1, fill = "blue", colour = "orange") +
+  labs(title = "Distribution of Grade Differences (Portuguese - Math)",
+       x = "Portuguese G3 - Maths G3 (points out of 20)",
+       y = "Number of students") 
+```
+
+The distribution of grade differences is roughly right-skewed, suggesting that students generally tend to score higher in Portuguese than in Mathematics. Most grade differences fall between -4 and 6, where the distribution appears approximately bell-shaped. However, a long right tail extends to approximately 15.
+
+### The Boxplot of the Grade Difference
+
+```{r, echo = FALSE, fig.width=6, fig.height=2}
+ggplot(data_merged_clean, aes(x = "", y = G3_diff)) +
+  geom_boxplot(fill = "blue", outlier.colour = "red") +
+  labs(title = "Boxplot of Grade Differences", y = "Portuguese G3 - Math G3") 
+```
+
+The boxplot shows a median grade difference of 2, with the middle 50% of students having a grade difference between 0 and 4. 
+
+### Side-by-Side Boxplots of the Grade Differences, Split by Urban and Rural Dwellers
+
+```{r, echo = FALSE, fig.width=6, fig.height=2}
+ ggplot(data_merged_clean, aes(x = address, y = G3_diff, fill = address)) +
+  geom_boxplot(outlier.colour = "red") +
+  labs(title = "Grade Differences by Home Address Type",
+       x = "Address", y = "Portuguese G3 -  Math G3")
+```
+
+The side-by-side boxplots show that urban students have a slightly higher median grade difference than rural students, suggesting that the difference between their Portuguese and Mathematics grades is somewhat similar.
+
+### Scatterplot of Mathematics Grade Against Portuguese Grade
+
+```{r, echo = FALSE, fig.width=6, fig.height=2}
+ggplot(data_merged_clean, aes(x = G3_math, y = G3_por)) +
+  geom_point(size = 2, position="jitter", colour = "steelblue") +
+  labs(title = "Portuguese vs Math Final Grade",
+       x = "Math Final Grade", y = "Portuguese Final Grade")
+```
+
+```{r, include = FALSE}
+cor(data_merged_clean$G3_math, data_merged_clean$G3_por)
+```
+
+The scatterplot shows a moderately positive relationship between Portuguese and Mathematics final grades (r $\approx$ 0.48). Students who perform well in one subject generally tend to perform well in the other. This positive association supports treating the two grades as paired observations rather than as independent samples.
+
+## Condition Checking
+
+$G3_{Portuguese}$, is a student's Final Grade in their Portuguese Class.
+$G3_{Math}$, is a student's Final Grade in their Math Class.
+
+The matched paired t-Test assumes that the differences between the underlying population means can be modeled by a Normal probability distribution. Here, this means that the differences between students' Portuguese and Mathematics grades, $X_{i, G3_{Portuguese}} - X_{i, G3_{Math}}$ should be approximately Normally distributed. To assess this condition, the differences for each student must be calculated and displayed on a Normal probability Q-Q plot. If the points approximately follow the reference line, the Normality condition is reasonable, and supports the assumption that the sampling distribution of the mean difference, $\bar{X}_{G3_{Portuguese}} - \bar{X}_{G3_{Math}}$ can be modeled as approximately Normal.
+
+```{r, echo = FALSE, fig.width=6, fig.height=2}
+por_marks = data_merged_clean$G3_por
+
+mat_marks = data_merged_clean$G3_math
+
+por_marks_mat_marks_diff = por_marks - mat_marks
+
+ggplot(data_merged_clean, aes(sample = por_marks_mat_marks_diff)) + 
+  stat_qq(col="blue", position = "jitter") + 
+  stat_qq_line(col="red") + 
+  ggtitle("Normal Q-Q Plot: Final Portuguese Grade-Final Math Grade,n=382")
+```
+
+From the above Normal Plot, on average these data points cluster around the mid-section of the y = x Normal probability line, approximately conforming to Normality. The sample size is also $n \geq 25$, so the robustness of the Central Limit Theorem (CLT) holds.
+
+The matched-Pairs t-Test requires paired observations, meaning each $X_{i, G3_{Portuguese}}$ and $X_{i, G3_{Math}}$ must come from the same student. This condition was addressed in the original study by using students' grade records from both courses to identify students enrolled in both Portuguese and Mathematics. The pairs must also be independent of one another; one student's paired grades should not influence or predict another students paired grades. However, the original study by P. Cortez and A.M.G. Silva, published in 2008, was observational rather than experimental, so this condition cannot be guaranteed through experimental design. Finally, random sampling requires the 382 pairs to be randomly selected from the target population. The original study randomly selected student questionnaires and historical report card records from two secondary schools in Portugal. Therefore, the sampling condition was reasonably addressed, but generalization remains limited.
+
+If the Normality assumption or the conditions of the Matched-Pairs t-test fails to hold, then alternatively a Bootstrap iteration re-sampling from the differences $X_{i, G3_{Portuguese}} - X_{i, G3_{Math}}$ can be used, as the Bootstrap would not require any underlying assumptions to be met about the groups of pairs or Normality of their respective population parameter and sample parameter distributions.
+
+The Welch t-test assumes that the underlying populations means approximately Normally distributed, or that the sampling distributions of the sample means are approximately Normal. Here, this applies separately to Portuguese grades for urban and rural students and to Mathematics grades for urban and rural students. The differences between the urban and rural sample means should therefore be approximately Normally distributed. Normality can be assessed using a Normal probability Q-Q plot for the observations in each group. If the plotted points approximately follow the reference line y = x, the Normality condition is considered reasonable. With sufficiently large sample sizes, the test is also robust to moderate departures from Normality.
+
+```{r, echo = FALSE, warning = FALSE, fig.width=6, fig.height=2}
+address_cond_u = filter(data_merged_clean, address == "U")
+
+address_cond_r = filter(data_merged_clean, address == "R")
+
+mat_marks_cond_u = address_cond_u$G3_math
+
+mat_marks_cond_u_df = as.data.frame(mat_marks_cond_u)
+
+por_marks_cond_u = address_cond_u$G3_por
+
+por_marks_cond_u_df = as.data.frame(por_marks_cond_u)
+
+mat_marks_cond_r = address_cond_r$G3_math
+
+mat_marks_cond_r_df = as.data.frame(mat_marks_cond_r)
+
+por_marks_cond_r = address_cond_r$G3_por
+
+por_marks_cond_r_df = as.data.frame(por_marks_cond_r)
+
+por_marks_diff_cond = por_marks_cond_u - por_marks_cond_r
+
+por_marks_diff_cond_df = as.data.frame(por_marks_diff_cond)
+
+mat_marks_diff_cond = mat_marks_cond_u - mat_marks_cond_r
+
+mat_marks_diff_cond_df = as.data.frame(mat_marks_diff_cond)
+
+
+ggplot(por_marks_cond_u_df, aes(sample = por_marks_cond_u)) + 
+  stat_qq(col="blue", position = "jitter") + 
+  stat_qq_line(col="red") + 
+  ggtitle("Normal Probability Plot: Final Portuguese Grades, Urban, n = 301")
+
+ggplot(por_marks_cond_r_df, aes(sample = por_marks_cond_r)) + 
+  stat_qq(col="blue", position = "jitter") + 
+  stat_qq_line(col="red") + 
+  ggtitle("Normal Probability Plot: Final Portuguese Grades, Rural, n = 81")
+
+ggplot(mat_marks_cond_u_df, aes(sample = mat_marks_cond_u)) + 
+  stat_qq(col="blue", position = "jitter") + 
+  stat_qq_line(col="red") + 
+  ggtitle("Normal Probability Plot: Final Math Grades, Urban, n = 301")
+
+ggplot(mat_marks_cond_r_df, aes(sample = por_marks_cond_r)) + 
+  stat_qq(col="blue", position = "jitter") + 
+  stat_qq_line(col="red") + 
+  ggtitle("Normal Probability Plot: Final Math Grades, Rural, n = 81")
+
+ggplot(por_marks_diff_cond_df, aes(sample = por_marks_diff_cond)) + 
+  stat_qq(col="blue", position = "jitter") + 
+  stat_qq_line(col="red") + 
+  ggtitle("Normal Probability Plot: Final Portuguese Grades, (Urban - Rural)")
+
+ggplot(mat_marks_diff_cond_df, aes(sample = mat_marks_diff_cond)) + 
+  stat_qq(col="blue", position = "jitter") + 
+  stat_qq_line(col="red") + 
+  ggtitle("Normal Probability Plot: Final Math Grades, (Urban - Rural)")
+```
+
+From the above Normal Plots, on average these data points cluster around the mid-section of the y = x Normal probability line, approximately conforming to Normality. The sample size's are also $n \geq 25$, so the robustness of the Central Limit Theorem (CLT) holds. 
+
+## Data Analysis
+
+### Method 1
+
+Does the data suggest that out of the students who take both final exams, are the average final grades higher in Portuguese class than Mathematics class?
+
+Let $\mu_{G3_{Portuguese}}$ be the average Portuguese Class Final Exam Grade. Let $\mu_{G3_{Math}}$ be the average Math Class Final Exam Grade. Let $\mu_{d}$ be the average difference in Portuguese and Math final exam grades
+
+$$H_{0}: \mu_{G3_{Portuguese}} \leq \mu_{G3_{Math}}; \mu_{G3_{Portuguese}} - \mu_{G3_{Math}} \leq 0; \mu_{d} \leq 0$$
+
+$$H_{A}: \mu_{G3_{Portuguese}} > \mu_{G3_{Math}}; \mu_{G3_{Portuguese}} - \mu_{G3_{Math}} >0; \mu_{d}>0 $$
+
+```{r, include = FALSE}
+t.test(~G3_diff, alternative = "greater", data = data_merged_clean)
+```
+
+$$T_{Obs} = 9.9771$$
+
+$$P-Value = 2.20*10^{-16}$$
+
+i. T-test 95% Confidence Interval
+
+```{r, include = FALSE}
+t.test(~G3_diff, conf.level = 0.95, data = data_merged_clean)$conf
+```
+
+$$1.708848 \leq \mu_{d} \leq 2.547697$$
+
+ii. Bootstrap 95% Confidence Interval
+
+```{r, include = FALSE}
+set.seed(3)
+N = 2000
+diffmean = numeric(N)
+for (i in 1:N){
+  diff.sample = sample(data_merged_clean$G3_diff, 382, replace = TRUE)
+  diffmean[i] = mean(diff.sample)
+}
+
+boot.diff.mean = data.frame(diffmean)
+head(boot.diff.mean)
+```
+
+```{r, include = FALSE}
+qdata(~diffmean, c(0.025, 0.975), data = boot.diff.mean)
+```
+
+$$1.693652 \leq \mu_{d} \leq 2.541950$$
+
+### Method 2
+
+Does the data suggest that secondary school students in urban regions perform better than secondary school students in rural regions; i.e. are the average final grades higher in secondary school students from urban regions of Portugal than rural regions of Portugal?
+
+```{r, include = FALSE}
+data_merged_clean$address = factor(data_merged_clean$address, levels = c("U", "R"))
+```
+
+i. Mathematics
+
+Let $\mu_{G3_{Math}|Urban}$ be the average final math exam grade for urban students
+
+Let $\mu_{G3_{Math}|Rural}$ be the average final math exam grade for rural students
+
+$$H_{0}: \mu_{G3_{Math}|Urban} \leq \mu_{G3_{Math}|Rural};\mu_{G3_{Math}|Urban} - \mu_{G3_{Math}|Rural} \leq 0$$
+
+$$H_{A}: \mu_{G3_{Math}|Urban} > \mu_{G3_{Math}|Rural};\mu_{G3_{Math}|Urban} - \mu_{G3_{Math}|Rural} > 0 $$
+
+```{r, include = FALSE}
+favstats(~G3_math|address, data = data_merged_clean)
+```
+
+```{r, include = FALSE}
+t.test(~G3_math|address, alternative = "greater", data = data_merged_clean)
+```
+
+$$T_{Obs} = 1.8347$$
+
+$$P-Value = 0.03443$$
+i. T-Test 95% Lower Confidence Bound
+
+```{r, include = FALSE}
+t.test(~G3_math|address, alternative = "greater", conf.level = 0.95, data = data_merged_clean, var.equal = FALSE)$conf
+```
+
+$$0.1023915 \leq \mu_{G3_{Math|Urban}} - \mu_{G3_{Math|Rural}} < \infty$$
+
+ii. Bootstrap 95% Lower Confidence Bound
+
+```{r, include = FALSE}
+urban = filter(data_merged_clean, address == "U")
+rural = filter(data_merged_clean, address == "R")
+```
+
+```{r, include = FALSE}
+set.seed(3)
+N = 2000
+boot.mean.urban = numeric(N)
+boot.mean.rural = numeric(N)
+boot.diffmeans = numeric(N)
+
+for (i in 1:N){
+  boot.sample.urban = sample(urban$G3_math, 301, replace = TRUE)
+  boot.sample.rural = sample(rural$G3_math, 81, replace = TRUE)
+  boot.mean.urban[i] = mean(boot.sample.urban)
+  boot.mean.rural[i] = mean(boot.sample.rural)
+  boot.diffmeans[i] = boot.mean.urban[i] - boot.mean.rural[i]
+}
+
+boot.diff.df = data.frame(boot.mean.urban, boot.mean.rural, boot.diffmeans)
+```
+
+```{r, include = FALSE}
+qdata(~boot.diffmeans, 0.05, data = boot.diff.df)
+```
+
+$$0.1258911 \leq  \mu_{G3_{Math}|Urban} - \mu_{G3_{Math}|Rural} < \infty$$
+
+ii. Portuguese
+
+Let $\mu_{G3_{Portuguese}|Urban}$ be the average final Portuguese exam grade for urban students
+
+Let $\mu_{G3_{Portuguese}|Rural}$ be the average final Portuguese exam grade for rural students
+
+$$H_{0}: \mu_{G3_{Portuguese}|Urban} \leq \mu_{G3_{Portuguese}|Rural};\mu_{G3_{Portuguese}|Urban} - \mu_{G3_{Portuguese}|Rural} \leq 0$$
+
+$$H_{A}: \mu_{G3_{Portuguese}|Urban} > \mu_{G3_{Portuguese}|Rural};\mu_{G3_{Portuguese}|Urban} - \mu_{G3_{Portuguese}|Rural} > 0 $$
+
+```{r, include = FALSE}
+favstats(~G3_por|address, data = data_merged_clean) 
+```
+
+```{r, include = FALSE}
+t.test(~G3_por|address, alternative = "greater", data = data_merged_clean)
+```
+
+$$T_{Obs} = 3.172$$
+
+$$P-Value = 0.0009927$$
+
+i. T-Test 95% Lower Confidence Bound
+
+```{r, include = FALSE}
+t.test(~G3_por|address, alternative = "greater", conf.level = 0.95, data = data_merged_clean, var.equal = FALSE)$conf
+```
+
+$$0.6482747  \leq \mu_{G3_{Portuguese}|Urban} - \mu_{G3_{Portuguese}|Rural} < \infty$$
+
+ii. 95% Bootstrap Lower Confidence Bound
+
+```{r, include = FALSE}
+urban = filter(data_merged_clean, address == "U")
+rural = filter(data_merged_clean, address == "R")
+```
+
+```{r, include = FALSE}
+set.seed(3)
+N = 2000
+boot.mean.urban = numeric(N)
+boot.mean.rural = numeric(N)
+boot.diffmeans = numeric(N)
+
+for (i in 1:N){
+  boot.sample.urban = sample(urban$G3_por, 301, replace = TRUE)
+  boot.sample.rural = sample(rural$G3_por, 81, replace = TRUE)
+  boot.mean.urban[i] = mean(boot.sample.urban)
+  boot.mean.rural[i] = mean(boot.sample.rural)
+  boot.diffmeans[i] = boot.mean.urban[i] - boot.mean.rural[i]
+}
+
+boot.diff.df = data.frame(boot.mean.urban, boot.mean.rural, boot.diffmeans)
+```
+
+```{r, include = FALSE}
+qdata(~boot.diffmeans, 0.05, data = boot.diff.df)
+```
+
+$$0.7015627 \leq  \mu_{G3_{Portuguese}|Urban} - \mu_{G3_{Portuguese}|Rural} < \infty $$
+
+## Conclusion and Inference
+
+This section interprets the results of our two statistical methods using the data visualizations, condition checks, and statistical analysis. It summarizes the conclusions supported by the data, identifies inferences that cannot be made, and discusses the limitations of the findings. All statistical tests were conducted using a significance level of $\alpha = 0.05$.
+
+### Method 1: Paired t-Test (Portuguese vs Mathematics)
+
+The first method investigated whether secondary school students who take both courses perform better in Portuguese than in Mathematics. Because each of the 382 students has a final grade in both subjects, a matched-pairs design was used, with $\mu_d = \mu_{G3_{Portuguese}} - \mu_{G3_{Math}}$ representing the true mean difference in final grades. The hypotheses were:
+
+$$H_0: \mu_d \leq 0 \qquad H_A: \mu_d > 0$$
+
+The data visualizations indicated that most students had higher final grades in Portuguese than in Mathematics. Condition checking showed that the distribution of the differences was approximately Normal in the center but exhibited some departure from Normality in the tails. Given the large sample size ($n = 382$), the paired t-test was considered appropriate. A bootstrap confidence interval, which does not rely on the assumption of Normality, was also calculated as a check on the results.
+
+The difference for each student was calculated as the Portuguese final grade minus the Mathematics final grade. The observed test statistic was $T_{Obs} = 9.98$ and with a P-value of $2.20 \times 10^{-16}$. Since the P-value is less than 0.05, we reject $H_0$ in favour of $H_A$. If there were truly no positive difference in the mean final grades between the two subjects, observing a test statistic this large would be extremely unlikely due to chance alone. Therefore, the data provides strong evidence that students who took both courses had, on average, higher final grades in Portuguese than in Mathematics.
+
+The 95% confidence interval from the paired t-test was $1.69 \leq \mu_d \leq 2.54$, indicating that we are 95% confident that the true mean difference in final grades is between 1.69 and 2.54. The bootstrap confidence interval $1.71 \leq \mu_{d} \leq 2.55$ is nearly identical. Because both intervals lie entirely above 0, they are consistent with the decision to reject $H_{0}$. The close agreement between the two intervals also suggests that the conclusion is robust to the departure from the Normality observed in the tails of the distribution.
+
+### Method 2: Two-Sample t-Test (Urban vs Rural)
+
+The second method investigated whether students from urban regions perform better than students from rural regions. Because urban ($n = 301$) and rural ($n = 81$) students form two independent groups, a two-sample t-test was conducted separately for Portuguese and Mathematics, with the difference defined as the urban mean minus the rural mean.
+
+$$H_0: \mu_{G3_{Math}|Urban} - \mu_{G3_{Math}|Rural} \leq 0 \qquad H_A: \mu_{G3_{Math}|Urban} - \mu_{G3_{Math}|Rural} > 0$$
+
+$$H_0: \mu_{G3_{Portuguese}|Urban} - \mu_{G3_{Portuguese}|Rural} \leq 0 \qquad H_A: \mu_{G3_{Portuguese}|Urban} - \mu_{G3_{Portuguese}|Rural} > 0$$
+
+For Portuguese, the test produced $T_{Obs} = 3.17$ with a P-value of 0.001. Since the P-value is less than 0.05, we reject $H_0$ in favour of $H_A$. The data provides evidence that urban students have, on average, higher Portuguese final grades than rural students. The 95% lower confidence bound was about 0.65, meaning we are 95% confidence that the true difference in the mean Portuguese final grades is at least 0.65. The bootstrap analysis produced a similar lower confidence bound of about 0.70. The close agreement between the two methods provides additional support for the conclusion that urban students have a higher average final grade in Portuguese.
+
+For Mathematics, the test produced $T_{Obs} = 1.83$ with a P-value of 0.034. Since the P-value is also less than 0.05, we reject $H_0$ in favour of $H_A$. The data provides evidence that urban students have higher Mathematics final grades, on average, then rural students. The 95% lower confidence bound is 0.10, with the bootstrap analysis producing a 95% confidence lower bound of 0.13. Because the P-value is close to 0.05 and both lower confidence bounds are close to 0, the evidence for Mathematics is considerably weaker than for Portuguese, which is consistent with the substantial overlap between the urban and rural boxplots in the data visualizations. 
+
+Overall, the results provide evidence that students who took both courses had higher final grades in Portuguese than in Mathematics. The results also provide evidence that urban students had higher average final grades than rural students in both subjects, although the difference was substantially larger and more clearly supported for Portuguese than for Mathematics.
+
+### Inferences We Cannot Make
+
+Although these results are statistically significant, they do not establish a cause-and-effect relationship. The data is observational, as students were not randomly assigned to either an urban or rural region and were not randomly assigned to either course. Therefore we cannot conclude that Mathematics is inherently more difficult than Portuguese or that living in an urban region causes students to achieve higher grades. Other factors, such as family income, parental education, or other demographic and educational characteristics, may contribute to the differences observed.
+
+The findings also cannot be generalized to all secondary school students in Portugal. The data was collected from only two schools in a single region during the 2005-2006 school year, and the analysis was limited to the 382 students who were enrolled in both courses. Consequently, the results are best interpreted as applying to students in similar schools and circumstances rather than to the broader population of secondary school students in Portugal.
+
+### Limitations of Our Findings
+
+Three limitations should be considered when interpreting these results. First, several students received a final Mathematics grade of 0 while receiving typical grades in Portuguese. These zeros may reflect students who did not complete the final assessment or withdrew from the course rather than students who genuinely earned a score of zero. Because these observations were retained in the analysis, their unusually large grade differences may have increased the mean difference in Method 1. 
+
+Second, unlike the paired design in Method 1, in which each student is compared with themselves, Method 2 compares two independent groups of students. Differences between the groups other than residential location could therefore contribute to the observed differences in grades. For example, if the urban group contains a greater proportion of higher-performing students, this could partly explain the higher average grades without residential location itself being responsible for the difference.
+
+Finally, the dataset does not contain a unique student ID variable. As a result, the Mathematics and Portuguese records were matched using shared background characteristics such as school, age, sex, and address. This creates the possibility that two different students with identical or very similar characteristics, such as twins attending the same school, could have been incorrectly matched. Because Method 1 relies on the two grades belonging to the same student, any incorrect matches could affect the estimated paired differences and the resulting statistical conclusions. 
+
+\newpage
+
+# Appendix
+
+Loading the packages:
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(mosaic)
+library(readr)
+```
+
+## Importing and Cleaning the Dataset
+
+```{r}
+data_mat = read.csv("~/Desktop/Graduate Studies/Certificate in Data Science and Analytics/Data Science 602/Project/student-mat.csv", sep = ";")
+data_por = read.csv("~/Desktop/Graduate Studies/Certificate in Data Science and Analytics/Data Science 602/Project/student-por.csv", sep = ";")
+```
+
+```{r}
+#the merged data represents 382 students that are taking both the Math class 
+#and the Portuguese class, that is for a given student, that same student is in both classes at that school
+
+data_merged = merge(data_mat, data_por, by = c("school", "sex", "age", 
+                                        "address", "famsize", "Pstatus","Medu", 
+                                        "Fedu", "Mjob", "Fjob", "reason", 
+                                        "nursery", "internet"))
+
+data_merged_clean = data_merged[, c("school", "sex", "age", "address", 
+                                    "Pstatus", "Mjob", "Fjob", "studytime.x", 
+                                    "studytime.y", "internet", "absences.x", 
+                                    "absences.y", "G1.x", "G2.x", "G3.x", 
+                                    "G1.y", "G2.y", "G3.y")]
+```
+
+```{r}
+names(data_merged_clean) = c("school", "sex", "age", "address", "Pstatus", 
+                             "Mjob", "Fjob", "studytime_math", "studytime_por", 
+                             "internet", "absences_math", "absences_por", 
+                             "G1_math", "G2_math", "G3_math", "G1_por", 
+                             "G2_por", "G3_por")
+```
+
+```{r}
+data_merged_clean = as.data.frame(data_merged_clean)
+data_merged_clean$G3_diff = data_merged_clean$G3_por - data_merged_clean$G3_math
+print(nrow(data_merged_clean))
+head(data_merged_clean)
+```
+
+## Data Visualization
+
+### The Histogram of the Grade Difference
+
+```{r, fig.width=6, fig.height=3}
+ggplot(data_merged_clean, aes(x = G3_diff)) +
+  geom_histogram(binwidth = 1, fill = "blue", colour = "orange") +
+  labs(title = "Distribution of Grade Differences (Portuguese - Math)",
+       x = "Portuguese G3 - Maths G3 (points out of 20)",
+       y = "Number of students") 
+```
+
+### The Boxplot of the Grade Difference
+
+```{r, fig.width=6, fig.height=3}
+ggplot(data_merged_clean, aes(x = "", y = G3_diff)) +
+  geom_boxplot(fill = "blue", outlier.colour = "red") +
+  labs(title = "Boxplot of Grade Differences", y = "Portuguese G3 - Math G3") 
+```
+
+### Side-by-Side Boxplots of the Grade Differences, Split by Urban and Rural Dwellers
+
+```{r, fig.width=6, fig.height=3}
+ ggplot(data_merged_clean, aes(x = address, y = G3_diff, fill = address)) +
+  geom_boxplot(outlier.colour = "red") +
+  labs(title = "Grade Differences by Home Address Type",
+       x = "Address", y = "Portuguese G3 -  Math G3")
+```
+
+### Scatterplot of Mathematics Grade Against Portuguese Grade
+
+```{r, fig.width=6, fig.height=3}
+ggplot(data_merged_clean, aes(x = G3_math, y = G3_por)) +
+  geom_point(size = 2, position="jitter", colour = "steelblue") +
+  labs(title = "Portuguese vs Math Final Grade",
+       x = "Math Final Grade", y = "Portuguese Final Grade")
+```
+
+### The correlation between Final Math Grades and Final Portuguese Grades
+
+```{r}
+cor(data_merged_clean$G3_math, data_merged_clean$G3_por)
+```
+
+## Condition Checking
+
+### Checking the Matched Paired t-Test Assumption
+
+```{r, fig.width=6, fig.height=3}
+por_marks = data_merged_clean$G3_por
+
+mat_marks = data_merged_clean$G3_math
+
+por_marks_mat_marks_diff = por_marks - mat_marks
+
+ggplot(data_merged_clean, aes(sample = por_marks_mat_marks_diff)) + 
+  stat_qq(col="blue", position = "jitter") + 
+  stat_qq_line(col="red") + 
+  ggtitle("Normal Probability Plot: Final Portuguese Grade - Final Math Grade, n = 382")
+```
+
+### Checking the Welch Two Sample t-test Assumption
+
+```{r, fig.width=6, fig.height=3}
+address_cond_u = filter(data_merged_clean, address == "U")
+
+address_cond_r = filter(data_merged_clean, address == "R")
+
+mat_marks_cond_u = address_cond_u$G3_math
+
+mat_marks_cond_u_df = as.data.frame(mat_marks_cond_u)
+
+por_marks_cond_u = address_cond_u$G3_por
+
+por_marks_cond_u_df = as.data.frame(por_marks_cond_u)
+
+mat_marks_cond_r = address_cond_r$G3_math
+
+mat_marks_cond_r_df = as.data.frame(mat_marks_cond_r)
+
+por_marks_cond_r = address_cond_r$G3_por
+
+por_marks_cond_r_df = as.data.frame(por_marks_cond_r)
+
+por_marks_diff_cond = por_marks_cond_u - por_marks_cond_r
+
+por_marks_diff_cond_df = as.data.frame(por_marks_diff_cond)
+
+mat_marks_diff_cond = mat_marks_cond_u - mat_marks_cond_r
+
+mat_marks_diff_cond_df = as.data.frame(mat_marks_diff_cond)
+
+
+ggplot(por_marks_cond_u_df, aes(sample = por_marks_cond_u)) + 
+  stat_qq(col="blue", position = "jitter") + 
+  stat_qq_line(col="red") + 
+  ggtitle("Normal Probability Plot: Final Portuguese Grades, Urban, n = 301")
+
+ggplot(por_marks_cond_r_df, aes(sample = por_marks_cond_r)) + 
+  stat_qq(col="blue", position = "jitter") + 
+  stat_qq_line(col="red") + 
+  ggtitle("Normal Probability Plot: Final Portuguese Grades, Rural, n = 81")
+
+ggplot(mat_marks_cond_u_df, aes(sample = mat_marks_cond_u)) + 
+  stat_qq(col="blue", position = "jitter") + 
+  stat_qq_line(col="red") + 
+  ggtitle("Normal Probability Plot: Final Math Grades, Urban, n = 301")
+
+ggplot(mat_marks_cond_r_df, aes(sample = por_marks_cond_r)) + 
+  stat_qq(col="blue", position = "jitter") + 
+  stat_qq_line(col="red") + 
+  ggtitle("Normal Probability Plot: Final Math Grades, Rural, n = 81")
+
+ggplot(por_marks_diff_cond_df, aes(sample = por_marks_diff_cond)) + 
+  stat_qq(col="blue", position = "jitter") + 
+  stat_qq_line(col="red") + 
+  ggtitle("Normal Probability Plot: Final Portuguese Grades, (Urban - Rural)")
+
+ggplot(mat_marks_diff_cond_df, aes(sample = mat_marks_diff_cond)) + 
+  stat_qq(col="blue", position = "jitter") + 
+  stat_qq_line(col="red") + 
+  ggtitle("Normal Probability Plot: Final Math Grades, (Urban - Rural)")
+```
+
+## Data Analysis
+
+### Method 1 
+
+T-Test:
+
+```{r}
+t.test(~G3_diff, alternative = "greater", data = data_merged_clean)
+```
+
+Method 1 95% Confidence Intervals:
+
+i. T-test 95% Confidence Interval
+
+```{r}
+t.test(~G3_diff, conf.level = 0.95, data = data_merged_clean)$conf
+```
+
+ii. Bootstrap 95% Confidence Interval
+
+```{r}
+set.seed(3)
+N = 2000
+diffmean = numeric(N)
+for (i in 1:N){
+  diff.sample = sample(data_merged_clean$G3_diff, 382, replace = TRUE)
+  diffmean[i] = mean(diff.sample)
+}
+
+boot.diff.mean = data.frame(diffmean)
+head(boot.diff.mean)
+```
+
+```{r}
+qdata(~diffmean, c(0.025, 0.975), data = boot.diff.mean)
+```
+
+### Method 2
+
+Readjusting the order of Urban and Rural in the favstats function so that the t-test has them in the right order:
+
+```{r}
+data_merged_clean$address = factor(data_merged_clean$address, levels = c("U", "R"))
+```
+
+Check to see if the above code worked:
+
+```{r}
+favstats(~G3_math|address, data = data_merged_clean)
+favstats(~G3_por|address, data = data_merged_clean) 
+```
+
+Mathematics:
+
+T-Test:
+
+```{r}
+t.test(~G3_math|address, alternative = "greater", data = data_merged_clean)
+```
+
+T-Test 95% Lower Confidence Bound:
+
+```{r}
+t.test(~G3_math|address, alternative = "greater", conf.level = 0.95, 
+       data = data_merged_clean, var.equal = FALSE)$conf
+```
+
+Bootstrap 95% Lower Confidence Bound
+
+```{r}
+urban = filter(data_merged_clean, address == "U")
+rural = filter(data_merged_clean, address == "R")
+
+set.seed(3)
+N = 2000
+boot.mean.urban = numeric(N)
+boot.mean.rural = numeric(N)
+boot.diffmeans = numeric(N)
+
+for (i in 1:N){
+  boot.sample.urban = sample(urban$G3_math, 301, replace = TRUE)
+  boot.sample.rural = sample(rural$G3_math, 81, replace = TRUE)
+  boot.mean.urban[i] = mean(boot.sample.urban)
+  boot.mean.rural[i] = mean(boot.sample.rural)
+  boot.diffmeans[i] = boot.mean.urban[i] - boot.mean.rural[i]
+}
+
+boot.diff.df = data.frame(boot.mean.urban, boot.mean.rural, boot.diffmeans)
+
+qdata(~boot.diffmeans, 0.05, data = boot.diff.df)
+```
+
+Portuguese:
+
+T-Test:
+
+```{r}
+t.test(~G3_por|address, alternative = "greater", data = data_merged_clean)
+```
+
+T-Test 95% Lower Confidence Bound
+
+```{r}
+t.test(~G3_por|address, alternative = "greater", conf.level = 0.95, 
+       data = data_merged_clean, var.equal = FALSE)$conf
+```
+
+95% Bootstrap Lower Confidence Bound
+
+```{r}
+urban = filter(data_merged_clean, address == "U")
+rural = filter(data_merged_clean, address == "R")
+
+set.seed(3)
+N = 2000
+boot.mean.urban = numeric(N)
+boot.mean.rural = numeric(N)
+boot.diffmeans = numeric(N)
+
+for (i in 1:N){
+  boot.sample.urban = sample(urban$G3_por, 301, replace = TRUE)
+  boot.sample.rural = sample(rural$G3_por, 81, replace = TRUE)
+  boot.mean.urban[i] = mean(boot.sample.urban)
+  boot.mean.rural[i] = mean(boot.sample.rural)
+  boot.diffmeans[i] = boot.mean.urban[i] - boot.mean.rural[i]
+}
+
+boot.diff.df = data.frame(boot.mean.urban, boot.mean.rural, boot.diffmeans)
+
+qdata(~boot.diffmeans, 0.05, data = boot.diff.df)
+```
+
+## References
+
+https://archive.ics.uci.edu/dataset/320/student+performance
+
+Cortez, P., & Silva, A. M. G. (2008). Using data mining to predict secondary school student
+performance. In A. Brito & J. Teixeira (Eds.), Proceedings of the 5th Future Business Technology
+Conference (FUBUTEC 2008) (pp. 5–12). EUROSIS.
+
+
